@@ -9,6 +9,7 @@ from sqlite3 import IntegrityError
 
 from thoughts import __version__
 from thoughts.db import StatusSummary, capture_thought, initialize, open_store, status_summary
+from thoughts.doctor import DoctorResult, run_doctor
 from thoughts.export import ProjectionDriftError, export_markdown
 from thoughts.models import VALID_PRIORITIES, VALID_TYPES, NewThought
 from thoughts.sync import SyncResult, apply_sync, check_sync
@@ -62,6 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("status", help="Show canonical store status.")
     subparsers.add_parser("export-md", help="Export canonical thoughts to Markdown projections.")
+    subparsers.add_parser("doctor", help="Run repository consistency diagnostics.")
     sync_parser = subparsers.add_parser(
         "sync",
         help="Validate or import Markdown projection edits.",
@@ -107,6 +109,11 @@ def run(argv: Sequence[str] | None = None) -> int:
                 result = export_markdown(conn, args.root)
             print(f"Exported {result.exported_count} projection(s)")
             return 0
+        if args.command == "doctor":
+            with open_store(args.root) as conn:
+                doctor_result = run_doctor(conn, args.root)
+            print_doctor_result(doctor_result)
+            return doctor_result.exit_code
         if args.command == "sync":
             with open_store(args.root) as conn:
                 sync_result = (
@@ -156,3 +163,18 @@ def print_sync_result(result: SyncResult, *, applied: bool) -> None:
         for issue in result.issues:
             path = "<database>" if issue.relative_path is None else issue.relative_path.as_posix()
             print(f"  {issue.severity}: {issue.issue_type}: {path}: {issue.message}")
+
+
+def print_doctor_result(result: DoctorResult) -> None:
+    """Print a stable human-readable doctor result."""
+    print(f"errors: {result.error_count}")
+    print(f"warnings: {result.warning_count}")
+    if not result.issues:
+        print("ok")
+        return
+    print("issues:")
+    for issue in result.issues:
+        path = "<database>" if issue.relative_path is None else issue.relative_path.as_posix()
+        thought_id = "<none>" if issue.thought_id is None else issue.thought_id
+        print(f"  {issue.severity}: {issue.issue_type}: {path}: {thought_id}: {issue.message}")
+        print(f"    repair: {issue.repair}")
