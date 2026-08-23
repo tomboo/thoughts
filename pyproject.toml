@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "thoughts"
+version = "0.1.0"
+description = "Local-first thought capture with SQLite canonical storage and Obsidian Markdown projections."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "Tom" },
+]
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "mypy>=1.19",
+  "pytest>=9.0",
+  "ruff>=0.14",
+]
+
+[project.scripts]
+thoughts = "thoughts.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "I",
+  "UP",
+  "B",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+files = ["src"]
