@@ -9,6 +9,7 @@ from sqlite3 import IntegrityError
 
 from thoughts import __version__
 from thoughts.db import StatusSummary, capture_thought, initialize, open_store, status_summary
+from thoughts.export import ProjectionDriftError, export_markdown
 from thoughts.models import VALID_PRIORITIES, VALID_TYPES, NewThought
 
 
@@ -59,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("status", help="Show canonical store status.")
+    subparsers.add_parser("export-md", help="Export canonical thoughts to Markdown projections.")
     return parser
 
 
@@ -92,9 +94,14 @@ def run(argv: Sequence[str] | None = None) -> int:
             with open_store(args.root) as conn:
                 print_status(status_summary(conn))
             return 0
+        if args.command == "export-md":
+            with open_store(args.root) as conn:
+                result = export_markdown(conn, args.root)
+            print(f"Exported {result.exported_count} projection(s)")
+            return 0
         parser.print_help()
         return 0
-    except (FileNotFoundError, IntegrityError, ValueError) as error:
+    except (FileNotFoundError, IntegrityError, ProjectionDriftError, ValueError) as error:
         parser.exit(1, f"thoughts: error: {error}\n")
 
 

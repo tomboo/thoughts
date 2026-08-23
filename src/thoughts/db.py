@@ -137,6 +137,44 @@ def get_thought(conn: sqlite3.Connection, thought_id: str) -> Thought:
     )
 
 
+def list_thoughts(conn: sqlite3.Connection) -> list[Thought]:
+    """Load all canonical thoughts in deterministic export order."""
+    rows = conn.execute("SELECT id FROM thoughts ORDER BY created_at, id").fetchall()
+    return [get_thought(conn, str(row["id"])) for row in rows]
+
+
+def projection_path_for(conn: sqlite3.Connection, thought_id: str) -> Path | None:
+    """Return an existing projection path for a thought, if one is recorded."""
+    row = conn.execute(
+        "SELECT path FROM markdown_projections WHERE thought_id = ?",
+        (thought_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return Path(str(row["path"]))
+
+
+def record_projection(
+    conn: sqlite3.Connection,
+    *,
+    thought_id: str,
+    path: Path,
+    content_hash: str,
+) -> None:
+    """Record projection export metadata."""
+    conn.execute(
+        "INSERT INTO markdown_projections ("
+        "thought_id, path, last_exported_at, last_exported_hash, last_seen_hash"
+        ") VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), ?, ?) "
+        "ON CONFLICT(thought_id) DO UPDATE SET "
+        "path = excluded.path, "
+        "last_exported_at = excluded.last_exported_at, "
+        "last_exported_hash = excluded.last_exported_hash, "
+        "last_seen_hash = excluded.last_seen_hash",
+        (thought_id, path.as_posix(), content_hash, content_hash),
+    )
+
+
 def status_summary(conn: sqlite3.Connection) -> StatusSummary:
     """Compute database and projection health counts."""
     total_thoughts = int(conn.execute("SELECT COUNT(*) FROM thoughts").fetchone()[0])

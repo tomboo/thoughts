@@ -12,7 +12,9 @@ license = "MIT"
 authors = [
   { name = "Tom" },
 ]
-dependencies = []
+dependencies = [
+  "pyyaml>=6.0",
+]
 
 [dependency-groups]
 dev = [
