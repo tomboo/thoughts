@@ -27,7 +27,7 @@ The system is designed to **evolve**. Raw thoughts accumulate. The system proces
 
 ## Status
 
-**Design phase.** Architecture lives under [docs/design/](./docs/design/). Reviews live under [docs/reviews/](./docs/reviews/). ADRs live under [docs/adr/](./docs/adr/). Project tasks live under [tasks/](./tasks/) and can be viewed through [bases/tasks.base](./bases/tasks.base).
+**Design phase.** Architecture lives under [docs/design/](./docs/design/). Implementation plans live under [docs/plans/](./docs/plans/). Reviews live under [docs/reviews/](./docs/reviews/). ADRs live under [docs/adr/](./docs/adr/). Project tasks live under [tasks/](./tasks/) and can be viewed through [bases/tasks.base](./bases/tasks.base).
 
 ### Proposed Foundation
 
