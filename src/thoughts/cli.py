@@ -21,6 +21,7 @@ from thoughts.db import StatusSummary, capture_thought, initialize, open_store, 
 from thoughts.doctor import DoctorResult, run_doctor
 from thoughts.export import ProjectionDriftError, export_markdown
 from thoughts.models import VALID_PRIORITIES, VALID_TYPES, NewThought
+from thoughts.search import SearchResult, search_text
 from thoughts.sync import SyncResult, apply_sync, check_sync
 
 
@@ -98,6 +99,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="JSON or JSONL classifier output keyed by thought id.",
     )
+    search_parser = subparsers.add_parser("search", help="Search canonical thoughts.")
+    search_parser.add_argument("query", help="Plain-text search query.")
+    search_parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Maximum number of results to print.",
+    )
     return parser
 
 
@@ -170,6 +179,11 @@ def run(argv: Sequence[str] | None = None) -> int:
                 )
             print_process_result(process_result, applied=args.apply)
             return 1 if process_result.has_errors else 0
+        if args.command == "search":
+            with open_store(args.root) as conn:
+                search_results = search_text(conn, args.query, limit=args.limit)
+            print_search_results(search_results)
+            return 0
         parser.print_help()
         return 0
     except (
@@ -256,3 +270,13 @@ def print_process_result(result: ProcessResult, *, applied: bool) -> None:
         print("issues:")
         for issue in result.issues:
             print(f"  {issue.severity}: {issue.issue_type}: {issue.thought_id}: {issue.message}")
+
+
+def print_search_results(results: list[SearchResult]) -> None:
+    """Print stable human-readable search results."""
+    print(f"results: {len(results)}")
+    for result in results:
+        snippet = result.body.strip().splitlines()[0] if result.body.strip() else ""
+        print(f"  {result.thought_id}: {result.title}")
+        if snippet:
+            print(f"    {snippet}")

@@ -45,7 +45,7 @@ def test_cli_init_capture_status(tmp_path, capsys: pytest.CaptureFixture[str]) -
     assert run(["--root", str(tmp_path), "status"]) == 0
     status_output = capsys.readouterr().out
     assert "thoughts: 1" in status_output
-    assert "latest_migration: 1" in status_output
+    assert "latest_migration: 2" in status_output
     assert "  note: 1" in status_output
 
     assert run(["--root", str(tmp_path), "export-md"]) == 0

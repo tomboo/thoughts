@@ -56,6 +56,36 @@ MIGRATIONS: dict[int, str] = {
         resolved_at TEXT
     );
     """,
+    2: """
+    CREATE VIRTUAL TABLE thought_fts USING fts5(
+        thought_id UNINDEXED,
+        title,
+        body,
+        tags
+    );
+
+    CREATE TABLE embedding_models (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        dimension INTEGER NOT NULL CHECK (dimension > 0),
+        normalization TEXT NOT NULL DEFAULT 'none',
+        created_at TEXT NOT NULL,
+        UNIQUE (provider, model, dimension)
+    );
+
+    CREATE TABLE thought_embeddings (
+        thought_id TEXT NOT NULL REFERENCES thoughts(id) ON DELETE CASCADE,
+        model_id INTEGER NOT NULL REFERENCES embedding_models(id) ON DELETE CASCADE,
+        content_hash TEXT NOT NULL,
+        embedding BLOB NOT NULL,
+        generated_at TEXT NOT NULL,
+        PRIMARY KEY (thought_id, model_id)
+    );
+
+    CREATE INDEX idx_embedding_models_provider_model
+        ON embedding_models(provider, model);
+    """,
 }
 
 

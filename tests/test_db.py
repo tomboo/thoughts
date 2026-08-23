@@ -18,8 +18,8 @@ def test_fresh_database_initializes(tmp_path: Path) -> None:
     assert (tmp_path / "Inbox").is_dir()
 
     with connect(db_path) as conn:
-        version = conn.execute("SELECT version FROM schema_migrations").fetchone()["version"]
-        assert version == 1
+        version = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
+        assert version == 2
 
 
 def test_repeated_init_is_idempotent(tmp_path: Path) -> None:
@@ -28,7 +28,7 @@ def test_repeated_init_is_idempotent(tmp_path: Path) -> None:
 
     with connect(database_path(tmp_path)) as conn:
         rows = conn.execute("SELECT version FROM schema_migrations").fetchall()
-        assert [row["version"] for row in rows] == [1]
+        assert [row["version"] for row in rows] == [1, 2]
 
 
 def test_foreign_keys_are_enabled(tmp_path: Path) -> None:
