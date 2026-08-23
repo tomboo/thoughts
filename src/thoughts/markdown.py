@@ -7,6 +7,9 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
+
+import yaml
 
 from thoughts.models import Thought
 from thoughts.paths import INBOX_DIR_NAME
@@ -22,6 +25,18 @@ class RenderedProjection:
     relative_path: Path
     content: str
     content_hash: str
+
+
+@dataclass(frozen=True)
+class ParsedProjection:
+    """Parsed Markdown frontmatter and body."""
+
+    frontmatter: dict[str, Any]
+    body: str
+
+
+class MarkdownParseError(ValueError):
+    """Raised when a Markdown projection cannot be parsed."""
 
 
 def render_projection(
@@ -91,6 +106,35 @@ def projection_hash(content: str) -> str:
         flags=re.MULTILINE,
     )
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def parse_projection(content: str) -> ParsedProjection:
+    """Parse a Markdown projection into frontmatter and body."""
+    if not content.startswith("---\n"):
+        msg = "missing YAML frontmatter"
+        raise MarkdownParseError(msg)
+    lines = content.splitlines(keepends=True)
+    closing_index = next(
+        (index for index, line in enumerate(lines[1:], start=1) if line.strip() == "---"),
+        None,
+    )
+    if closing_index is None:
+        msg = "unterminated YAML frontmatter"
+        raise MarkdownParseError(msg)
+    frontmatter_text = "".join(lines[1:closing_index])
+    body = "".join(lines[closing_index + 1 :])
+
+    try:
+        loaded = yaml.safe_load(frontmatter_text)
+    except yaml.YAMLError as error:
+        msg = f"malformed YAML frontmatter: {error}"
+        raise MarkdownParseError(msg) from error
+
+    if not isinstance(loaded, dict):
+        msg = "frontmatter must be a mapping"
+        raise MarkdownParseError(msg)
+
+    return ParsedProjection(frontmatter=cast(dict[str, Any], loaded), body=body)
 
 
 def yaml_scalar(value: str) -> str:

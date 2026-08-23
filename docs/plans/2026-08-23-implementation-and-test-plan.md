@@ -219,6 +219,8 @@ Acceptance criteria:
 
 Imports valid Markdown edits into SQLite.
 
+Implementation choice: apply mode uses one all-or-nothing transaction per run for canonical thought updates. If any projected file has a validation error, no canonical thought rows are updated; blocking issues are recorded in `sync_issues` for review.
+
 Acceptance criteria:
 
 - Imports only validated fields.

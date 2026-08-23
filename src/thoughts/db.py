@@ -175,6 +175,58 @@ def record_projection(
     )
 
 
+def update_thought_from_projection(
+    conn: sqlite3.Connection,
+    *,
+    thought_id: str,
+    title: str,
+    body: str,
+    thought_type: str,
+    status: str,
+    due_on: str | None,
+    priority: str | None,
+    tags: tuple[str, ...],
+) -> None:
+    """Update user-editable canonical fields from a validated Markdown projection."""
+    conn.execute(
+        "UPDATE thoughts SET "
+        "title = ?, body = ?, type = ?, status = ?, due_on = ?, priority = ?, "
+        "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') "
+        "WHERE id = ?",
+        (title, body, thought_type, status, due_on, priority, thought_id),
+    )
+    conn.execute("DELETE FROM thought_tags WHERE thought_id = ?", (thought_id,))
+    for tag in tags:
+        conn.execute(
+            "INSERT INTO thought_tags (thought_id, tag) VALUES (?, ?)",
+            (thought_id, tag),
+        )
+
+
+def record_sync_issue(
+    conn: sqlite3.Connection,
+    *,
+    thought_id: str | None,
+    path: Path | None,
+    issue_type: str,
+    severity: str,
+    message: str,
+) -> None:
+    """Record one unresolved sync issue."""
+    conn.execute(
+        "INSERT INTO sync_issues ("
+        "thought_id, path, issue_type, severity, message, detected_at"
+        ") VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+        (
+            thought_id,
+            None if path is None else path.as_posix(),
+            issue_type,
+            severity,
+            message,
+        ),
+    )
+
+
 def status_summary(conn: sqlite3.Connection) -> StatusSummary:
     """Compute database and projection health counts."""
     total_thoughts = int(conn.execute("SELECT COUNT(*) FROM thoughts").fetchone()[0])

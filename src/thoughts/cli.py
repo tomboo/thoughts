@@ -11,6 +11,7 @@ from thoughts import __version__
 from thoughts.db import StatusSummary, capture_thought, initialize, open_store, status_summary
 from thoughts.export import ProjectionDriftError, export_markdown
 from thoughts.models import VALID_PRIORITIES, VALID_TYPES, NewThought
+from thoughts.sync import SyncResult, apply_sync, check_sync
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,6 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("status", help="Show canonical store status.")
     subparsers.add_parser("export-md", help="Export canonical thoughts to Markdown projections.")
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Validate or import Markdown projection edits.",
+    )
+    sync_mode = sync_parser.add_mutually_exclusive_group(required=True)
+    sync_mode.add_argument("--check", action="store_true", help="Report Markdown edits and issues.")
+    sync_mode.add_argument("--apply", action="store_true", help="Import valid Markdown edits.")
     return parser
 
 
@@ -99,6 +107,13 @@ def run(argv: Sequence[str] | None = None) -> int:
                 result = export_markdown(conn, args.root)
             print(f"Exported {result.exported_count} projection(s)")
             return 0
+        if args.command == "sync":
+            with open_store(args.root) as conn:
+                sync_result = (
+                    apply_sync(conn, args.root) if args.apply else check_sync(conn, args.root)
+                )
+            print_sync_result(sync_result, applied=args.apply)
+            return 1 if sync_result.has_errors else 0
         parser.print_help()
         return 0
     except (FileNotFoundError, IntegrityError, ProjectionDriftError, ValueError) as error:
@@ -130,3 +145,14 @@ def print_status(summary: StatusSummary) -> None:
     print("by_status:")
     for status, count in summary.by_status.items():
         print(f"  {status}: {count}")
+
+
+def print_sync_result(result: SyncResult, *, applied: bool) -> None:
+    """Print a stable human-readable sync result."""
+    action = "Applied" if applied else "Found"
+    print(f"{action} {result.applied_count if applied else len(result.updates)} update(s)")
+    if result.issues:
+        print("issues:")
+        for issue in result.issues:
+            path = "<database>" if issue.relative_path is None else issue.relative_path.as_posix()
+            print(f"  {issue.severity}: {issue.issue_type}: {path}: {issue.message}")
