@@ -25,12 +25,12 @@ My pushback: do not build Phase 1 exactly as written. Split it into a narrower f
 
 ### P0: Source-of-truth boundaries are asserted but not operationally true
 
-The design says Markdown files are canonical and SQLite can be rebuilt from the vault at any time (`DESIGN.md:58-64`, `DESIGN.md:71`). But the schema stores fields that are not fully reconstructible from current Markdown:
+The design says Markdown files are canonical and SQLite can be rebuilt from the vault at any time (`docs/design/DESIGN.md:58-64`, `docs/design/DESIGN.md:71`). But the schema stores fields that are not fully reconstructible from current Markdown:
 
-- `raw_content` is described as original pre-processing content (`DESIGN.md:170`).
-- `processing_log` records historical actions (`DESIGN.md:180-186`).
-- `review_queue`, `duplicates`, and `supersessions` are stateful workflows (`DESIGN.md:201-229`).
-- `thoughts reindex` is described as destructive to SQLite (`DESIGN.md:318-324`).
+- `raw_content` is described as original pre-processing content (`docs/design/DESIGN.md:170`).
+- `processing_log` records historical actions (`docs/design/DESIGN.md:180-186`).
+- `review_queue`, `duplicates`, and `supersessions` are stateful workflows (`docs/design/DESIGN.md:201-229`).
+- `thoughts reindex` is described as destructive to SQLite (`docs/design/DESIGN.md:318-324`).
 
 Those claims collide. If SQLite is disposable, then historical processing logs, original raw content, unresolved duplicate decisions, review status, and supersession decisions must either live in Markdown or be explicitly treated as disposable cache. The current design does neither.
 
@@ -46,7 +46,7 @@ If the answer is "processing logs are disposable," say that clearly. If the answ
 
 ### P0: Stable identity is missing
 
-The schema uses `id INTEGER PRIMARY KEY AUTOINCREMENT` and `path TEXT UNIQUE NOT NULL` (`DESIGN.md:153-156`). That is not enough for a vault where humans and Obsidian can rename files. Reindexing can assign new integer IDs. Paths can change. Wikilinks can be rewritten. Duplicate/supersession relationships can become ambiguous.
+The schema uses `id INTEGER PRIMARY KEY AUTOINCREMENT` and `path TEXT UNIQUE NOT NULL` (`docs/design/DESIGN.md:153-156`). That is not enough for a vault where humans and Obsidian can rename files. Reindexing can assign new integer IDs. Paths can change. Wikilinks can be rewritten. Duplicate/supersession relationships can become ambiguous.
 
 This is the most important technical omission in the design.
 
@@ -60,9 +60,9 @@ Use a ULID or UUID. SQLite should use that ID as the primary key. Paths should b
 
 ### P0: Direct LLM mutation of canonical notes needs a write fence
 
-The design says `thoughts process` updates frontmatter and adds LLM-suggested wikilinks to the content body (`DESIGN.md:297-301`). It also says the LLM does all classification with no rules-first fallback (`DESIGN.md:90-97`).
+The design says `thoughts process` updates frontmatter and adds LLM-suggested wikilinks to the content body (`docs/design/DESIGN.md:297-301`). It also says the LLM does all classification with no rules-first fallback (`docs/design/DESIGN.md:90-97`).
 
-That is risky for a note system where the vault is canonical. A model can misclassify a task, invent a due date, overtag, add noisy links, or rewrite structure in ways that are annoying to unwind. The design acknowledges correction (`DESIGN.md:335-343`) but does not prevent damage or make changes reviewable.
+That is risky for a note system where the vault is canonical. A model can misclassify a task, invent a due date, overtag, add noisy links, or rewrite structure in ways that are annoying to unwind. The design acknowledges correction (`docs/design/DESIGN.md:335-343`) but does not prevent damage or make changes reviewable.
 
 Recommendation: Phase 1 should not let the LLM modify the note body. Limit writes to a constrained frontmatter patch generated from a strict schema, then validate it before writing. Record enough metadata to support audit and reversal:
 
@@ -79,7 +79,7 @@ For low-confidence or high-impact changes, write `status: flagged` and enqueue r
 
 ### P1: The MVP is not actually minimal
 
-Phase 1 includes initialization, processing, search, status, reprocess, reindex, SQLite schema, sqlite-vec, embeddings, LLM processing, and lifecycle schema (`DESIGN.md:573-580`). That is too much surface area for the first version.
+Phase 1 includes initialization, processing, search, status, reprocess, reindex, SQLite schema, sqlite-vec, embeddings, LLM processing, and lifecycle schema (`docs/design/DESIGN.md:573-580`). That is too much surface area for the first version.
 
 The riskiest parts depend on each other:
 
@@ -102,7 +102,7 @@ This shape lets the foundation fail in boring ways before model-driven behavior 
 
 ### P1: "Current vault context" is dangerously vague
 
-The classifier input includes "current vault context" and existing tags (`DESIGN.md:294-296`). That can become expensive, slow, privacy-sensitive, and nondeterministic. It also risks leaking unrelated private notes into every classification call if OpenAI API is used.
+The classifier input includes "current vault context" and existing tags (`docs/design/DESIGN.md:294-296`). That can become expensive, slow, privacy-sensitive, and nondeterministic. It also risks leaking unrelated private notes into every classification call if OpenAI API is used.
 
 Recommendation: define a bounded context contract:
 
@@ -116,13 +116,13 @@ For a personal vault, privacy is a product requirement, not an implementation de
 
 ### P1: The design mixes Obsidian Bases with Dataview
 
-The design says "Obsidian Bases (or Dataview)" for virtual groupings (`DESIGN.md:77`). That weakens the interface commitment. Dataview is powerful, but for this project the user-facing structured layer should be Obsidian Bases.
+The design says "Obsidian Bases (or Dataview)" for virtual groupings (`docs/design/DESIGN.md:77`). That weakens the interface commitment. Dataview is powerful, but for this project the user-facing structured layer should be Obsidian Bases.
 
 Recommendation: remove Dataview from the primary design. Build generated `.base` files as first-class outputs when views are needed. Treat Dataview, if supported at all, as an optional export later.
 
 ### P1: Reindex semantics are underspecified
 
-`thoughts reindex` says it walks the vault, rebuilds SQLite, and recomputes all embeddings (`DESIGN.md:318-324`). That is expensive and may mutate enough derived state to surprise the user. It also does not say how deleted files, moved files, renamed files, changed frontmatter, or corrupted YAML are handled.
+`thoughts reindex` says it walks the vault, rebuilds SQLite, and recomputes all embeddings (`docs/design/DESIGN.md:318-324`). That is expensive and may mutate enough derived state to surprise the user. It also does not say how deleted files, moved files, renamed files, changed frontmatter, or corrupted YAML are handled.
 
 Recommendation: specify reindex modes:
 
@@ -135,19 +135,19 @@ Add explicit behavior for missing IDs, duplicate IDs, moved paths, invalid front
 
 ### P1: Task handling is too weak for the promise being made
 
-The system classifies tasks and extracts due dates and priorities (`DESIGN.md:31-33`, `DESIGN.md:133-140`), but it does not define how task checkboxes relate to `status`, how completed tasks are detected, or whether Obsidian Tasks-style syntax is supported.
+The system classifies tasks and extracts due dates and priorities (`docs/design/DESIGN.md:31-33`, `docs/design/DESIGN.md:133-140`), but it does not define how task checkboxes relate to `status`, how completed tasks are detected, or whether Obsidian Tasks-style syntax is supported.
 
 Recommendation: decide whether tasks are notes, checkboxes, or both. If they are notes, use frontmatter `status`. If they are checkbox lines inside notes, define line-level identity and sync rules. Avoid pretending both are solved.
 
 ### P2: Lifecycle schema should not ship before lifecycle behavior
 
-The design includes lifecycle tables in the MVP while deferring features (`DESIGN.md:201-229`, `DESIGN.md:580`). Schema-first lifecycle work adds migration burden without proving user value. Worse, if stable identity changes later, these tables will be the first things to break.
+The design includes lifecycle tables in the MVP while deferring features (`docs/design/DESIGN.md:201-229`, `docs/design/DESIGN.md:580`). Schema-first lifecycle work adds migration burden without proving user value. Worse, if stable identity changes later, these tables will be the first things to break.
 
 Recommendation: keep lifecycle fields that are user-visible and durable in Markdown, but defer `review_queue`, `duplicates`, and `supersessions` tables until the corresponding commands exist. Alternatively, mark those tables as experimental cache and allow dropping them without migration guarantees.
 
 ### P2: Generated synthesized objects need provenance and overwrite policy
 
-Concepts, entities, and digests are described as auto-generated living pages (`DESIGN.md:392-557`). The design does not yet say how user edits are protected. A generated concept page that gets re-synthesized can overwrite human improvements unless there is a hard boundary.
+Concepts, entities, and digests are described as auto-generated living pages (`docs/design/DESIGN.md:392-557`). The design does not yet say how user edits are protected. A generated concept page that gets re-synthesized can overwrite human improvements unless there is a hard boundary.
 
 Recommendation: generated notes need one of these policies:
 
@@ -167,13 +167,13 @@ For Obsidian, the section-owned model is usually the best compromise:
 
 ### P2: Embedding model choice is not a detail
 
-The schema hardcodes a sample `float[384]` vector dimension (`DESIGN.md:194-198`) while the tech stack allows `sentence-transformers` or OpenAI embeddings (`DESIGN.md:566`). Those dimensions and distance assumptions differ. A model switch can invalidate the vector table.
+The schema hardcodes a sample `float[384]` vector dimension (`docs/design/DESIGN.md:194-198`) while the tech stack allows `sentence-transformers` or OpenAI embeddings (`docs/design/DESIGN.md:566`). Those dimensions and distance assumptions differ. A model switch can invalidate the vector table.
 
 Recommendation: make embedding collections model-specific. Store provider, model, dimension, normalization, content hash, and generated timestamp. Consider separate vector tables per dimension/model or a rebuild path that drops incompatible embeddings.
 
 ### P2: The tag model needs stricter normalization
 
-Tags appear as both JSON text in `thoughts.tags` and normalized rows in `tags` (`DESIGN.md:165`, `DESIGN.md:188-192`). The design does not define casing, spaces, nested tags, aliases, or whether tags include `#`.
+Tags appear as both JSON text in `thoughts.tags` and normalized rows in `tags` (`docs/design/DESIGN.md:165`, `docs/design/DESIGN.md:188-192`). The design does not define casing, spaces, nested tags, aliases, or whether tags include `#`.
 
 Recommendation: pick one canonical storage shape in Markdown and one derived index shape in SQLite. Normalize tags on write, preserve user display only if needed, and reject ambiguous values.
 

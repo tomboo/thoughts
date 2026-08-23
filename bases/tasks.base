@@ -1,0 +1,192 @@
+filters:
+  and:
+    - file.inFolder("tasks")
+    - file.ext == "md"
+    - file.name != "_template"
+    - file.name != "README"
+formulas:
+  priority_rank: if(task_priority == "high", 1, if(task_priority == "medium", 2, 3))
+  status_rank: if(task_status == "doing", 1, if(task_status == "todo", 2, if(task_status == "backlog", 3, if(task_status == "done", 4, 5))))
+  days_until_due: if(task_due, (task_due - today()).days, "")
+  age_days: if(task_created, (today() - task_created).days, "")
+properties:
+  file.name:
+    displayName: Open Task
+  note.task_id:
+    displayName: ID
+  note.title:
+    displayName: Title
+  note.task_status:
+    displayName: Status
+  note.task_priority:
+    displayName: Priority
+  note.task_created:
+    displayName: Created
+  note.task_due:
+    displayName: Due
+  note.task_completed:
+    displayName: Completed
+  note.tags:
+    displayName: Tags
+  formula.priority_rank:
+    displayName: P
+  formula.status_rank:
+    displayName: S
+  formula.days_until_due:
+    displayName: Days Left
+  formula.age_days:
+    displayName: Age
+views:
+  - type: table
+    name: Active
+    filters:
+      and:
+        - task_status == "doing" || task_status == "todo"
+    order:
+      - file.name
+      - title
+      - task_status
+      - task_priority
+      - task_due
+      - formula.days_until_due
+      - tags
+      - task_created
+    sort:
+      - property: formula.status_rank
+        direction: ASC
+      - property: formula.priority_rank
+        direction: ASC
+      - property: task_due
+        direction: ASC
+    columnSize:
+      file.name: 150
+      note.title: 320
+      note.task_status: 80
+      note.task_priority: 75
+  - type: table
+    name: Board
+    filters:
+      and:
+        - task_status != "done"
+        - task_status != "cancelled"
+    groupBy:
+      property: task_status
+      direction: DESC
+    order:
+      - file.name
+      - title
+      - task_priority
+      - task_due
+      - formula.days_until_due
+      - tags
+      - task_created
+    sort:
+      - property: formula.priority_rank
+        direction: ASC
+      - property: task_due
+        direction: ASC
+      - property: task_created
+        direction: ASC
+    columnSize:
+      file.name: 150
+      note.title: 320
+      note.task_priority: 75
+  - type: table
+    name: Due
+    filters:
+      and:
+        - task_due.isTruthy()
+        - task_status != "done"
+        - task_status != "cancelled"
+    order:
+      - file.name
+      - title
+      - task_due
+      - formula.days_until_due
+      - task_status
+      - task_priority
+      - tags
+    sort:
+      - property: task_due
+        direction: ASC
+      - property: formula.priority_rank
+        direction: ASC
+    columnSize:
+      file.name: 150
+      note.title: 320
+      note.task_due: 100
+      formula.days_until_due: 85
+  - type: table
+    name: Backlog
+    filters:
+      and:
+        - task_status == "backlog"
+    order:
+      - file.name
+      - title
+      - task_priority
+      - tags
+      - task_created
+      - formula.age_days
+    sort:
+      - property: title
+        direction: ASC
+      - property: formula.priority_rank
+        direction: ASC
+      - property: task_created
+        direction: ASC
+    columnSize:
+      file.name: 150
+      note.title: 320
+      note.task_priority: 75
+      formula.age_days: 70
+  - type: table
+    name: Done
+    filters:
+      and:
+        - task_status == "done" || task_status == "cancelled"
+    order:
+      - file.name
+      - title
+      - task_status
+      - task_completed
+      - task_priority
+      - tags
+    sort:
+      - property: task_completed
+        direction: DESC
+      - property: task_id
+        direction: DESC
+    columnSize:
+      file.name: 150
+      note.title: 320
+      note.task_status: 90
+      note.task_completed: 100
+  - type: table
+    name: All
+    groupBy:
+      property: task_status
+      direction: ASC
+    order:
+      - file.name
+      - task_id
+      - title
+      - task_status
+      - task_priority
+      - task_created
+      - task_due
+      - task_completed
+      - tags
+      - file.mtime
+    sort:
+      - property: formula.status_rank
+        direction: ASC
+      - property: formula.priority_rank
+        direction: ASC
+      - property: task_id
+        direction: ASC
+    columnSize:
+      file.name: 150
+      note.title: 300
+      note.task_status: 85
+      note.task_priority: 75
