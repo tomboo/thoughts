@@ -8,6 +8,15 @@ from pathlib import Path
 from sqlite3 import IntegrityError
 
 from thoughts import __version__
+from thoughts.classify import (
+    DEFAULT_CONFIDENCE_THRESHOLD,
+    Classifier,
+    FileClassifier,
+    MissingClassifier,
+    ProcessResult,
+    apply_process,
+    dry_run_process,
+)
 from thoughts.db import StatusSummary, capture_thought, initialize, open_store, status_summary
 from thoughts.doctor import DoctorResult, run_doctor
 from thoughts.export import ProjectionDriftError, export_markdown
@@ -71,6 +80,24 @@ def build_parser() -> argparse.ArgumentParser:
     sync_mode = sync_parser.add_mutually_exclusive_group(required=True)
     sync_mode.add_argument("--check", action="store_true", help="Report Markdown edits and issues.")
     sync_mode.add_argument("--apply", action="store_true", help="Import valid Markdown edits.")
+    process_parser = subparsers.add_parser(
+        "process",
+        help="Classify thoughts with reviewed model output.",
+    )
+    process_mode = process_parser.add_mutually_exclusive_group(required=True)
+    process_mode.add_argument("--dry-run", action="store_true", help="Validate proposals only.")
+    process_mode.add_argument("--apply", action="store_true", help="Apply approved proposals.")
+    process_parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=DEFAULT_CONFIDENCE_THRESHOLD,
+        help="Minimum confidence required before canonical metadata is updated.",
+    )
+    process_parser.add_argument(
+        "--mock-output",
+        type=Path,
+        help="JSON or JSONL classifier output keyed by thought id.",
+    )
     return parser
 
 
@@ -121,9 +148,37 @@ def run(argv: Sequence[str] | None = None) -> int:
                 )
             print_sync_result(sync_result, applied=args.apply)
             return 1 if sync_result.has_errors else 0
+        if args.command == "process":
+            classifier: Classifier = (
+                FileClassifier(args.mock_output)
+                if args.mock_output is not None
+                else MissingClassifier()
+            )
+            with open_store(args.root) as conn:
+                process_result = (
+                    apply_process(
+                        conn,
+                        classifier,
+                        confidence_threshold=args.confidence_threshold,
+                    )
+                    if args.apply
+                    else dry_run_process(
+                        conn,
+                        classifier,
+                        confidence_threshold=args.confidence_threshold,
+                    )
+                )
+            print_process_result(process_result, applied=args.apply)
+            return 1 if process_result.has_errors else 0
         parser.print_help()
         return 0
-    except (FileNotFoundError, IntegrityError, ProjectionDriftError, ValueError) as error:
+    except (
+        FileNotFoundError,
+        IntegrityError,
+        ProjectionDriftError,
+        RuntimeError,
+        ValueError,
+    ) as error:
         parser.exit(1, f"thoughts: error: {error}\n")
 
 
@@ -178,3 +233,26 @@ def print_doctor_result(result: DoctorResult) -> None:
         thought_id = "<none>" if issue.thought_id is None else issue.thought_id
         print(f"  {issue.severity}: {issue.issue_type}: {path}: {thought_id}: {issue.message}")
         print(f"    repair: {issue.repair}")
+
+
+def print_process_result(result: ProcessResult, *, applied: bool) -> None:
+    """Print a stable human-readable process result."""
+    action = "Applied" if applied else "Validated"
+    print(f"{action} {result.applied_count if applied else len(result.proposals)} proposal(s)")
+    if result.proposals:
+        print("proposals:")
+        for proposal in result.proposals:
+            print(
+                "  "
+                f"{proposal.thought_id}: "
+                f"type={proposal.thought_type} "
+                f"status={proposal.status} "
+                f"due={proposal.due_on or '<none>'} "
+                f"priority={proposal.priority or '<none>'} "
+                f"tags={','.join(proposal.tags) or '<none>'} "
+                f"confidence={proposal.confidence:.2f}"
+            )
+    if result.issues:
+        print("issues:")
+        for issue in result.issues:
+            print(f"  {issue.severity}: {issue.issue_type}: {issue.thought_id}: {issue.message}")
