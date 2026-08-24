@@ -26,3 +26,4 @@ Move operational ownership of the Thoughts SQLite database to the iMac so live d
 
 - Keep SQLite as the source of truth.
 - Do not create competing writable database copies during the transfer.
+- Implementation plan: `docs/plans/2026-08-24-task-001-database-owner-transfer.md`.
