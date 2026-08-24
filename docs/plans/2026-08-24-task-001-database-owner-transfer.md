@@ -1,18 +1,22 @@
 ---
 title: Task 001 Database Owner Transfer Plan
 date: 2026-08-24
-status: draft
+status: executed
 tags:
   - plan
   - infrastructure
   - ownership
 related:
   - "[[001-transfer-ownership-of-database-to-imac]]"
+  - "[[2026-08-23-database-owner-handoff]]"
   - "[[003-add-remote-thought-creation-channels]]"
   - "[[005-build-owner-routed-remote-capture]]"
 ---
 
 # Task 001 Database Owner Transfer Plan
+
+> Executed 2026-08-23. Outcome and rollback path are recorded in
+> [docs/ops/2026-08-23-database-owner-handoff.md](../ops/2026-08-23-database-owner-handoff.md).
 
 ## Goal
 
