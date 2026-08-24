@@ -67,6 +67,19 @@ Non-owner machines must not create a competing writable `.thoughts/thoughts.sqli
   machines; `PRAGMA integrity_check` = `ok` on each).
 - `backups/` is untracked — `*.sqlite` is covered by `.gitignore`.
 
+## Known Gap: iMac Git Push Credentials
+
+The iMac can commit but cannot push. Its `gh` token for `tomboo` is invalid and
+the HTTPS remote has no usable keychain credential, so `git push` fails with
+`could not read Username for 'https://github.com'`. During the transfer the
+verification commit was authored on the iMac and pushed from the MacBook via
+`git fetch toms-imac.local:/Users/tom/Projects/hermes-projects/thoughts main`.
+
+Fix before tasks `003`/`005`, which need the owner to publish projections on its
+own: run `gh auth login -h github.com` on the iMac, or move its `origin` to an
+SSH remote backed by a user key (the key currently offered to GitHub resolves to
+a `tomboo/youtube-watch` deploy key, which cannot push this repo).
+
 ## Rollback Path
 
 Rollback is allowed only until remote capture channels (tasks `003`/`005`) are enabled.
