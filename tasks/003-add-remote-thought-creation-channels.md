@@ -30,6 +30,10 @@ The goal is low-friction capture without creating competing writable SQLite owne
 
 ## Notes
 
+- Task `005` shipped the create-only MVP and already satisfies the device, owner, MacBook-capture, iPhone-route, and duplicate/offline/retry criteria above; see
+  `docs/adr/0002-owner-routed-create-only-remote-capture.md` and `docs/ops/remote-capture.md`.
+  What remains here is the Hermes-mediated path with approvals, and narrowing the SSH
+  authorization to a forced `thoughts receive` command.
 - Start with create-only capture; defer remote edit, sync, and search workflows.
 - Prefer a narrow command/API that appends one canonical thought through the owner machine.
 - Do not expose unrestricted database or filesystem writes over the remote channel.

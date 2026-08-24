@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import shlex
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from sqlite3 import IntegrityError
@@ -21,7 +23,17 @@ from thoughts.db import StatusSummary, capture_thought, initialize, open_store, 
 from thoughts.doctor import DoctorResult, run_doctor
 from thoughts.export import ProjectionDriftError, export_markdown
 from thoughts.models import VALID_PRIORITIES, VALID_TYPES, NewThought
+from thoughts.remote import CaptureResponse, ProtocolError, parse_request, receive_capture
 from thoughts.search import SearchResult, search_text
+from thoughts.submit import (
+    ConfigError,
+    SubmitOutcome,
+    build_request,
+    flush_spool,
+    load_config,
+    spool_depth,
+    submit,
+)
 from thoughts.sync import SyncResult, apply_sync, check_sync
 
 
@@ -99,6 +111,53 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="JSON or JSONL classifier output keyed by thought id.",
     )
+    receive_parser = subparsers.add_parser(
+        "receive",
+        help="Owner-only: create one thought from a JSON capture request on stdin.",
+    )
+    receive_parser.add_argument(
+        "--export",
+        action="store_true",
+        help="Refresh Markdown projections after a successful create.",
+    )
+    remote_parser = subparsers.add_parser(
+        "remote",
+        help="Submit thoughts to the owner machine from a non-owner device.",
+    )
+    remote_subparsers = remote_parser.add_subparsers(dest="remote_command")
+    remote_capture_parser = remote_subparsers.add_parser(
+        "capture",
+        help="Submit one thought to the owner, spooling locally if it is unreachable.",
+    )
+    remote_capture_parser.add_argument("text", help="Thought body text.")
+    remote_capture_parser.add_argument(
+        "--title",
+        help="Thought title. Defaults to the first body line.",
+    )
+    remote_capture_parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        help="Tag to add. May be passed more than once.",
+    )
+    remote_capture_parser.add_argument(
+        "--type",
+        choices=sorted(VALID_TYPES),
+        default="inbox",
+        help="Thought type.",
+    )
+    remote_capture_parser.add_argument("--due", help="Due date as YYYY-MM-DD.")
+    remote_capture_parser.add_argument(
+        "--priority",
+        choices=sorted(VALID_PRIORITIES),
+        help="Task priority.",
+    )
+    remote_subparsers.add_parser("flush", help="Send spooled capture requests to the owner.")
+    remote_subparsers.add_parser(
+        "status",
+        help="Show remote capture configuration and spool depth.",
+    )
+
     search_parser = subparsers.add_parser("search", help="Search canonical thoughts.")
     search_parser.add_argument("query", help="Plain-text search query.")
     search_parser.add_argument(
@@ -179,6 +238,10 @@ def run(argv: Sequence[str] | None = None) -> int:
                 )
             print_process_result(process_result, applied=args.apply)
             return 1 if process_result.has_errors else 0
+        if args.command == "receive":
+            return run_receive(args.root, export=args.export)
+        if args.command == "remote":
+            return run_remote(parser, args)
         if args.command == "search":
             with open_store(args.root) as conn:
                 search_results = search_text(conn, args.query, limit=args.limit)
@@ -187,6 +250,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return 0
     except (
+        ConfigError,
         FileNotFoundError,
         IntegrityError,
         ProjectionDriftError,
@@ -199,6 +263,73 @@ def run(argv: Sequence[str] | None = None) -> int:
 def main(argv: Sequence[str] | None = None) -> None:
     """Console-script entrypoint."""
     raise SystemExit(run(argv))
+
+
+def run_receive(root: Path, *, export: bool) -> int:
+    """Handle one owner-side capture request read from stdin."""
+    payload = sys.stdin.read()
+    try:
+        request = parse_request(payload)
+    except ProtocolError as error:
+        print(CaptureResponse(status="rejected", request_id="", error=str(error)).to_json())
+        return 1
+
+    with open_store(root) as conn:
+        try:
+            response = receive_capture(conn, request)
+        except (IntegrityError, ValueError) as error:
+            rejection = CaptureResponse(
+                status="rejected",
+                request_id=request.request_id,
+                error=str(error),
+            )
+            print(rejection.to_json())
+            return 1
+        if export and response.status == "created":
+            export_markdown(conn, root)
+    print(response.to_json())
+    return 0
+
+
+def run_remote(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    """Handle non-owner capture submission. Never opens the canonical store."""
+    config = load_config()
+    if args.remote_command == "capture":
+        request = build_request(
+            config,
+            body=args.text,
+            title=args.title,
+            thought_type=args.type,
+            tags=tuple(args.tag),
+            due_on=args.due,
+            priority=args.priority,
+        )
+        outcome = submit(request, config)
+        print_submit_outcome(outcome)
+        return 0 if outcome.status in {"created", "duplicate", "spooled"} else 1
+    if args.remote_command == "flush":
+        outcomes = flush_spool(config)
+        print(f"flushed: {sum(1 for outcome in outcomes if outcome.status != 'deferred')}")
+        print(f"remaining: {spool_depth(config.spool_dir)}")
+        for outcome in outcomes:
+            print_submit_outcome(outcome, indent="  ")
+        return 1 if any(outcome.status == "rejected" for outcome in outcomes) else 0
+    if args.remote_command == "status":
+        print(f"origin: {config.origin}")
+        print(f"owner_command: {shlex.join(config.owner_command)}")
+        print(f"spool_dir: {config.spool_dir}")
+        print(f"spooled: {spool_depth(config.spool_dir)}")
+        return 0
+    parser.parse_args(["remote", "--help"])
+    return 0
+
+
+def print_submit_outcome(outcome: SubmitOutcome, *, indent: str = "") -> None:
+    """Print a stable human-readable submit outcome."""
+    thought_id = outcome.thought_id or "<none>"
+    print(f"{indent}{outcome.status}: {outcome.request_id}: {thought_id}")
+    if outcome.detail:
+        print(f"{indent}  {outcome.detail}")
 
 
 def default_title(text: str) -> str:
@@ -214,6 +345,7 @@ def print_status(summary: StatusSummary) -> None:
     print(f"thoughts: {summary.total_thoughts}")
     print(f"projections: {summary.projection_count}")
     print(f"unresolved_sync_issues: {summary.unresolved_sync_issues}")
+    print(f"remote_capture_requests: {summary.remote_capture_requests}")
     print(f"latest_migration: {summary.latest_migration}")
     print("by_type:")
     for thought_type, count in summary.by_type.items():

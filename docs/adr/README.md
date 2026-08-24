@@ -10,6 +10,7 @@ docs/adr/
   _template.md
   adr.schema.json
   0001-sqlite-canonical-markdown-projection.md
+  0002-owner-routed-create-only-remote-capture.md
 ```
 
 ## Filenames

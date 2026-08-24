@@ -23,6 +23,7 @@ class StatusSummary:
     by_status: dict[str, int]
     projection_count: int
     unresolved_sync_issues: int
+    remote_capture_requests: int
     latest_migration: int | None
 
 
@@ -61,34 +62,72 @@ def initialize(root: Path) -> Path:
 
 def capture_thought(conn: sqlite3.Connection, thought: NewThought) -> Thought:
     """Create one canonical thought in a single transaction."""
+    with conn:
+        thought_id = insert_thought(conn, thought)
+    return get_thought(conn, thought_id)
+
+
+def insert_thought(conn: sqlite3.Connection, thought: NewThought) -> str:
+    """Write one thought and its tags without managing a transaction.
+
+    Callers own the surrounding transaction so a thought can be committed
+    together with related rows, such as a remote capture request record.
+    """
     validate_new_thought(thought)
     thought_id = new_thought_id()
     timestamp_expr = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
 
-    with conn:
+    conn.execute(
+        "INSERT INTO thoughts ("
+        "id, title, body, type, status, created_at, updated_at, due_on, priority, source"
+        f") VALUES (?, ?, ?, ?, ?, {timestamp_expr}, {timestamp_expr}, ?, ?, ?)",
+        (
+            thought_id,
+            thought.title.strip(),
+            thought.body,
+            thought.thought_type,
+            thought.status,
+            thought.due_on,
+            thought.priority,
+            thought.source,
+        ),
+    )
+    for tag in thought.tags:
+        normalized = normalize_tag(tag)
         conn.execute(
-            "INSERT INTO thoughts ("
-            "id, title, body, type, status, created_at, updated_at, due_on, priority, source"
-            f") VALUES (?, ?, ?, ?, ?, {timestamp_expr}, {timestamp_expr}, ?, ?, ?)",
-            (
-                thought_id,
-                thought.title.strip(),
-                thought.body,
-                thought.thought_type,
-                thought.status,
-                thought.due_on,
-                thought.priority,
-                thought.source,
-            ),
+            "INSERT INTO thought_tags (thought_id, tag) VALUES (?, ?)",
+            (thought_id, normalized),
         )
-        for tag in thought.tags:
-            normalized = normalize_tag(tag)
-            conn.execute(
-                "INSERT INTO thought_tags (thought_id, tag) VALUES (?, ?)",
-                (thought_id, normalized),
-            )
 
-    return get_thought(conn, thought_id)
+    return thought_id
+
+
+def find_capture_request(conn: sqlite3.Connection, request_id: str) -> str | None:
+    """Return the thought id already recorded for a capture request, if any."""
+    row = conn.execute(
+        "SELECT thought_id FROM capture_requests WHERE request_id = ?",
+        (request_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return str(row["thought_id"])
+
+
+def record_capture_request(
+    conn: sqlite3.Connection,
+    *,
+    request_id: str,
+    thought_id: str,
+    origin: str,
+    submitted_at: str | None,
+) -> None:
+    """Record that a remote capture request produced a canonical thought."""
+    conn.execute(
+        "INSERT INTO capture_requests ("
+        "request_id, thought_id, origin, submitted_at, received_at"
+        ") VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+        (request_id, thought_id, origin, submitted_at),
+    )
 
 
 def normalize_tag(tag: str) -> str:
@@ -236,6 +275,9 @@ def status_summary(conn: sqlite3.Connection) -> StatusSummary:
     unresolved_sync_issues = int(
         conn.execute("SELECT COUNT(*) FROM sync_issues WHERE resolved_at IS NULL").fetchone()[0]
     )
+    remote_capture_requests = int(
+        conn.execute("SELECT COUNT(*) FROM capture_requests").fetchone()[0]
+    )
     latest_migration_row = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()
     latest_migration = latest_migration_row[0] if latest_migration_row is not None else None
     return StatusSummary(
@@ -244,6 +286,7 @@ def status_summary(conn: sqlite3.Connection) -> StatusSummary:
         by_status=by_status,
         projection_count=projection_count,
         unresolved_sync_issues=unresolved_sync_issues,
+        remote_capture_requests=remote_capture_requests,
         latest_migration=latest_migration,
     )
 

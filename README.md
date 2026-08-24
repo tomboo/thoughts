@@ -38,6 +38,14 @@ The system is designed to **evolve**. Raw thoughts accumulate. The system proces
 - [ ] `thoughts status` — vault and DB overview
 - [ ] `thoughts doctor` — detect schema, projection, and sync problems
 
+### Remote Capture
+
+The canonical database has one owner machine. Other devices create thoughts through it rather than writing their own copy — see the [remote capture runbook](./docs/ops/remote-capture.md).
+
+- [x] `thoughts receive` — owner-side: create one thought from a JSON request on stdin
+- [x] `thoughts remote capture` — non-owner: submit a thought, spooling locally when offline
+- [x] `thoughts remote flush` / `thoughts remote status` — drain and inspect the offline spool
+
 ### Future
 
 - [ ] LLM processing: classify, tag, extract metadata

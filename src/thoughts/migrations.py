@@ -86,6 +86,18 @@ MIGRATIONS: dict[int, str] = {
     CREATE INDEX idx_embedding_models_provider_model
         ON embedding_models(provider, model);
     """,
+    3: """
+    CREATE TABLE capture_requests (
+        request_id TEXT PRIMARY KEY,
+        thought_id TEXT NOT NULL REFERENCES thoughts(id) ON DELETE CASCADE,
+        origin TEXT NOT NULL,
+        submitted_at TEXT,
+        received_at TEXT NOT NULL
+    );
+
+    CREATE INDEX idx_capture_requests_thought
+        ON capture_requests(thought_id);
+    """,
 }
 
 
